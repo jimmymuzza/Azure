@@ -1,0 +1,49 @@
+Connect-AzAccount -TenantId <TENANTID>
+
+# Select Subscription
+$subscriptionId = <SUBSCRIPTION NAME>
+
+#Select the right Azure subscription
+Select-AzSubscription -SubscriptionName $subscriptionId
+
+##Set thge OS type for the install
+$OS = "Windows"
+
+$Computers = @( 
+"<SERVERNAME>"
+)
+
+$PublicSettings = @{"workspaceId" = "<WORKSPACEID>"}
+$ProtectedSettings = @{"workspaceKey" = "<WORKSPACEKEY>"}
+
+
+foreach ($computer in $Computers) {
+
+## Get Resource Group for each VM
+$resourceGroup = (Get-AzVM -name $computer).ResourceGroupName
+
+## Get OS Type and only proceed if correct
+$OsType = (Get-AzVM -ResourceGroupName $resourceGroup -name $computer).StorageProfile.OsDisk.OsType
+$Location = (Get-AzVM -ResourceGroupName $resourceGroup -name $computer).Location
+
+
+if ($OsType -contains $OS) {
+
+Remove-AzVMExtension -ResourceGroupName $resourceGroup -Name "MicrosoftMonitoringAgent" -VMName $computer -Force #-WhatIf
+Remove-AzVMExtension -ResourceGroupName $resourceGroup -Name "MMAExtension" -VMName $computer -Force #-WhatIf
+
+Set-AzVMExtension -ExtensionName "MicrosoftMonitoringAgent" `
+	-ResourceGroupName $resourceGroup `
+	-VMName $computer `
+	-Publisher "Microsoft.EnterpriseCloud.Monitoring" `
+	-ExtensionType "MicrosoftMonitoringAgent" `
+	-TypeHandlerVersion 1.0 `
+	-Settings $PublicSettings `
+	-ProtectedSettings $ProtectedSettings `
+ -Location $Location
+}
+else {
+    write-host "Wrong OS- Not in scope for MMA installation:" $VM -ForegroundColor Yellow
+    write-host ""
+}
+}
