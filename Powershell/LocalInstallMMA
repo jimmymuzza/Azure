@@ -1,0 +1,69 @@
+<#
+.DESCRIPTION
+Install-MMA installs the Microsoft Monitoring Agent on a locally 
+Windows Server and configures it for a Log Analytics workspace. 
+
+.EXAMPLE
+LocalInstall-MMA.ps1
+#>
+
+#Define variables
+[string]$LocalFile = "c:\temp\mmasetup\MMASetup-AMD64.exe"  #Change to where your source is located
+[string]$WorkspaceId = "<WORKSPACEID>"  #Enter your Workspace ID here
+[string]$WorkspaceKey = "<WORKSPACEKEY>"  #Enter your Workspace Key here
+
+
+#Check if OMS Agent is installed
+$MMAObj = Get-WmiObject -Class Win32_Product -Filter "name='Microsoft Monitoring Agent'"
+
+
+#If the agent is not installed then install it
+if($MMAObj -eq $null)
+{
+
+#Install Agent
+Write-output "$env:computername - Installing the Microsoft Monitoring Agent..."
+
+
+#Check for the existence of C:\temp\MMASetup first and if it doesn't exist then create it
+$Path = Test-Path -Path "c:\temp\mmasetup"
+    if ( $Path -eq $false ) {New-Item -ItemType Directory -Path c:\temp\mmasetup }
+
+
+#Copy the MMA Agent file from where we are executing the script to the target server
+Write-Output "Copying MMASetup-AMD64.exe file to C:\temp\mmasetup"
+Copy-Item -Path $LocalFile -Destination "c:\temp\mmasetup\MMASetup-AMD64.exe" -force -Verbose
+
+
+#Install the agent
+$ArgumentList = '/C:"setup.exe /qn ADD_OPINSIGHTS_WORKSPACE=0 AcceptEndUserLicenseAgreement=1"'
+Start-Process $LocalFile -ArgumentList $ArgumentList -ErrorAction Stop -Wait | Out-Null
+
+}
+
+#Check if the Log Analytic workspace is already configured
+$AgentCfg = New-Object -ComObject AgentConfigManager.MgmtSvcCfg
+$OMSWorkspaces = $AgentCfg.GetCloudWorkspaces()
+
+$CSEWorkspaceFound = $false
+foreach($OMSWorkspace in $OMSWorkspaces)
+{
+    if($OMSWorkspace.workspaceId -eq $WorkspaceID)
+    {
+        $CSEWorkspaceFound = $true
+    }
+}
+ 
+if(!$CSEWorkspaceFound)
+{
+    Write-Output "Adding Azure Log Analytics Workspace..."
+    $AgentCfg.AddCloudWorkspace($WorkspaceID,$WorkspaceKey)
+    Restart-Service HealthService
+}
+else
+{
+    Write-Output "Workspace already configured"
+}
+ 
+# Get all configured Workspaces
+$AgentCfg.GetCloudWorkspaces()
