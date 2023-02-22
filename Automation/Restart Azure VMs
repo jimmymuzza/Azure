@@ -1,0 +1,11 @@
+Import-Module Az.Automation
+Import-Module Az.Accounts
+Import-Module Az.Compute
+# Get the connection "AzureRunAsConnection "
+$connection = Get-AutomationConnection -Name AzureRunAsConnection
+$connectionResult = Connect-AzAccount -ServicePrincipal -Tenant $connection.TenantID -ApplicationId $connection.ApplicationID -CertificateThumbprint $connection.CertificateThumbprint
+##
+$ResourceGroupName = "<RESOURCEGROUP>"
+Get-AzVM -ResourceGroupName $ResourceGroupName -Name <VMNAME*> | Select Name | ForEach-Object {
+Restart-AzVM -ResourceGroupName $ResourceGroupName -Name $_.Name
+}
