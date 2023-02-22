@@ -1,0 +1,130 @@
+Clear-Host;
+
+Connect-AzAccount -TenantId <TENANTID>
+
+## Set VM names here that need MMA installed
+$IncludeVMs = @(
+"<SERVERNAME>"
+)
+
+# Settings for MMA agent
+$PublicSettings = @{"workspaceId" = "<WORKSPACEID>"}
+$ProtectedSettings = @{"workspaceKey" = "<WORKSPACEKEY>"}
+
+## Get all Subscriptions
+$Subscriptions = Get-AzSubscription | where-object{$_.Name -NotLike '*Sandbox*'} -ErrorAction continue
+
+
+## Get Subscription ID
+ForEach ($Subscription in $Subscriptions)  {
+$SubscriptionName = $Subscription.Name
+$SubscriptionId = $Subscription.Id
+
+
+## Change to selected subscription
+Select-AzSubscription -SubscriptionId $SubscriptionId
+write-host "######################################################"
+write-host "Selected Subscription" $SubscriptionName -ForegroundColor Yellow
+write-host "Selected Subscription ID" $SubscriptionId -ForegroundColor Yellow
+write-host "######################################################"
+write-host ""
+
+
+#*************************************  MAIN BODY  *************************************
+
+## Get all Resource groups within each subscription
+$RGs = Get-AzResourceGroup
+$TotalGroups = $RGs.Count
+
+
+## Confirm that there is at least 1 RG before proceeding
+if (($RGs.ResourceGroupName).count -ge "1")  {
+     foreach ($RG in $RGs)  {
+         $RGNames = $RG.ResourceGroupName
+         write-host "Found resource Group:" $RGNames -ForegroundColor Green
+         
+
+         ## Get all VMs from each RGs
+         $VMs = Get-AzVM -ResourceGroupName $RG.ResourceGroupName
+
+
+         ## Confirm that there is at least 1 VM before proceeding
+         if ($VMs.count -ge "1")  {
+         write-host "Found VM:" $VMs.Name
+
+
+              foreach ($VM in $VMs.Name)  {
+                ## Found VM in list
+                if ($IncludeVMs -contains $VM) {
+                
+
+                    ## Fetch virtual machines in the group
+                    $VMDetail = Get-AzVM -ResourceGroupName $RG.ResourceGroupName -Name $VM
+
+
+                    ## VM Status (running/deallocated/stopped)
+                    $VMStatus = Get-AzVM -ResourceGroupName $RG.ResourceGroupName -Name $VM -Status
+                    $VMStatusDetail = $VMStatus.Statuses.DisplayStatus -match "^VM .*$"
+               
+
+                    ##$VMStatusDetail = $VMDetail.Statuses.DisplayStatus -match "^VM .*$"
+                    New-Object psobject -Property @{
+                         "VMName"           = $VMDetail.Name
+                         "ResourceGroup"    = $VMDetail.ResourceGroupName
+                         "VMStatus"         = "$VMStatusDetail"
+                         "VMType"           = $VMDetail.StorageProfile.ImageReference.Offer + " $($VMDetail.StorageProfile.ImageReference.Sku)"
+                         "Location"         = $VMDetail.Location
+                         "Subscription"     = ($VMDetail.Id -split '/')[2]
+                         ## Set individual VM Variables                       
+                    }
+
+                    Select-AzSubscription -SubscriptionName $Subscription
+
+                    # Uninstall MicrosoftMonitoringAgent before reinstalling
+                    write-host "Uninstalling MMA on:" $VMDetail.Name -ForegroundColor Magenta
+                    write-host ""
+
+                    Remove-AzVMExtension -ResourceGroupName $VMDetail.ResourceGroupName -Name "MicrosoftMonitoringAgent" -VMName $VMDetail.Name -Force #-WhatIf
+
+                                        # Uninstall  MMAExtension before reinstalling
+                                        write-host "Uninstalling MMA on:" $VMDetail.Name -ForegroundColor Magenta
+                                        write-host ""
+
+                                        Remove-AzVMExtension -ResourceGroupName $VMDetail.ResourceGroupName -Name " MMAExtension" -VMName $VMDetail.Name -Force #-WhatIf
+
+                                                    # Uninstall OmsAgentForLinux before reinstalling
+                                                    write-host "Uninstalling OMS on:" $VMDetail.Name -ForegroundColor Magenta
+                                                    write-host ""
+
+                                                    Remove-AzVMExtension -ResourceGroupName $VMDetail.ResourceGroupName -Name "OmsAgentForLinux" -VMName $VMDetail.Name -Force #-WhatIf
+
+
+                    write-host "Installing MMA on:" $VMDetail.Name -ForegroundColor Magenta
+                    write-host ""
+
+
+                    ## Run thorugh each VM and install MMA
+                        Select-AzSubscription -SubscriptionName $Subscription
+                        Set-AzVMExtension -ExtensionName "MicrosoftMonitoringAgent" `
+                        -ResourceGroupName $VMDetail.ResourceGroupName `
+                        -VMName $VMDetail.Name `
+                        -Publisher "Microsoft.EnterpriseCloud.Monitoring" `
+                        -ExtensionType "MicrosoftMonitoringAgent" `
+                        -TypeHandlerVersion 1.0 `
+                        -Settings $PublicSettings `
+                        -ProtectedSettings $ProtectedSettings `
+                        -Location $VMDetail.Location
+                }
+                else {
+                write-host "Not in scope for MMA installation:" $VM -ForegroundColor Yellow
+                write-host ""
+                }
+              }
+            }
+            else {
+            #write-host "No VMs Found" -ForegroundColor Yellow
+            #write-host ""
+            }
+         }
+     }
+} ## End Main Script
