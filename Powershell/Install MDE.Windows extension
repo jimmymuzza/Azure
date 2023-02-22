@@ -1,0 +1,43 @@
+Connect-AzAccount -TenantId <TENANTID>
+
+# Select Subscription
+$subscriptionId = <SUBSCRIPTION NAME>
+
+#Select the right Azure subscription
+Select-AzSubscription -SubscriptionName $subscriptionId
+
+##Set thge OS type for the install
+$OS = "Windows"
+
+$Computers = @( 
+"<SERVERNAME>"
+)
+
+
+foreach ($computer in $Computers) {
+
+## Get Resource Group for each VM
+$resourceGroup = (Get-AzVM -name $computer).ResourceGroupName
+
+## Get OS Type and only proceed if correct
+$OsType = (Get-AzVM -ResourceGroupName $resourceGroup -name $computer).StorageProfile.OsDisk.OsType
+$Location = (Get-AzVM -ResourceGroupName $resourceGroup -name $computer).Location
+
+
+if ($OsType -contains $OS) {
+
+Set-AzVMExtension -ExtensionName "MDE.Windows" `
+	-ResourceGroupName $resourceGroup `
+	-VMName $computer `
+	-Publisher "Microsoft.Azure.AzureDefenderForServers" `
+	-ExtensionType "MDE.Windows" `
+	-TypeHandlerVersion 1.0 `
+	-Settings $PublicSettings `
+	-ProtectedSettings $ProtectedSettings `
+ -Location $Location
+}
+else {
+    write-host "Unable to install Defender" $VM -ForegroundColor Yellow
+    write-host ""
+}
+}
