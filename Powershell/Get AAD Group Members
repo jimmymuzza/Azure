@@ -1,0 +1,5 @@
+# define variable for aad  group
+$AADGroup = "<AADGROUP>"
+
+# get Azure AD Group members and export to CSV
+Get-AzureADGroup -SearchString $AADGroup | Get-AzureADGroupMember -Top 1000 | Select DisplayName, Mail | Export-Csv -path "$AADGroup-members-$((Get-Date).ToString('dd-MM-yyyy')).csv" 
