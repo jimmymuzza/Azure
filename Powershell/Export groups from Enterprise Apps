@@ -1,0 +1,19 @@
+Connect-AzAccount -TenantId <TENANTID>
+Connect-AzureAD
+
+# Found here: https://stackoverflow.com/questions/70208534/the-best-way-to-pull-a-list-of-all-apps-from-azure-ad-with-users-or-groups-the
+
+$ApplicationIDs = @(
+    "<APPLICATIONID>"    
+)
+
+$ForExport = ForEach ($ApplicationID in $ApplicationIDs)  {
+# Get all service principals, and for each one, get all the app role assignments, 
+# resolving the app role ID to it's display name. Output everything to a CSV.
+Get-AzureADServicePrincipal -ObjectId $ApplicationID | % {  
+    # Get the app role assignments for this app, and add a field for the app role name
+    Get-AzureADServiceAppRoleAssignment -ObjectId ($_.ObjectId)
+  }
+}
+
+$ForExport | Export-Csv "app_role_assignments.csv" -NoTypeInformation
