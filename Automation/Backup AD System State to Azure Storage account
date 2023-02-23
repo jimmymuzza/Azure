@@ -1,0 +1,9 @@
+$pass= "<DOMAINUSERPASSWORD>" | ConvertTo-SecureString -AsPlainText -Force
+$Cred = New-Object System.Management.Automation.PsCredential('<USERACCOUNT>',$pass)
+New-PSDrive -Name "T" -Root "<SHARENAME>" -PSProvider "FileSystem" -Credential $cred
+$context = New-AzStorageContext -StorageAccountName "<STORAGEACCOUNTNAME>" -StorageAccountKey "<STORAGEACCOUNTKEY>"
+$files = (Get-ChildItem "T:\" -recurse).FullName
+$files | ForEach-Object { 
+$filename = Split-Path $_ -leaf
+Set-AzStorageBlobContent -Context $context -File $_ -Container "<CONTAINERNAME>" -Blob $_
+}
